@@ -13,3 +13,4 @@ synchronization:
   delete_removed_markdown: true
   preserve_directory_structure: true
   frequency: "monthly"
+``

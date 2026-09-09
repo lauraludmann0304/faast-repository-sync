@@ -24,6 +24,19 @@ Excluded:
 - GitHub Actions and GitLab CI/CD configuration from the FAAST repositories
 - Issues, pull requests, merge requests, releases, dashboards, and wiki content
 
+# Mapping
+
+Source:
+content/skills/<domain>
+
+Target:
+docs/<domain>
+
+Example:
+content/skills/GDPR/GDPR-CREATE-001.md
+
+docs/GDPR/GDPR-CREATE-001.md
+``
 ## Processing sequence
 
 1. Validate required environment variables.
