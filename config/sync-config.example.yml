@@ -1,0 +1,15 @@
+source:
+  repository_url: "https://github.com/porschedigital/faast.git"
+  branch: "main"
+  skills_path: "content/skills"
+
+target:
+  repository_url: "https://gitlab.devops.porsche-cloud.com/pdcn/engineering/faast.git"
+  branch: "main"
+  skills_path: "docs"
+
+synchronization:
+  include_pattern: "**/*.md"
+  delete_removed_markdown: true
+  preserve_directory_structure: true
+  frequency: "monthly"

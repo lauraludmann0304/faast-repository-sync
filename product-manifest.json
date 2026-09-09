@@ -1,0 +1,7 @@
+{
+  "name": "FAAST Repository Sync",
+  "version": "1.0.0",
+  "runtime": "Python 3.11+",
+  "orchestrator": "GitLab CI/CD",
+  "syncScope": "content/skills/**/*.md"
+}

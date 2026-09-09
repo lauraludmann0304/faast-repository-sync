@@ -1,0 +1,80 @@
+default:
+  image: python:3.12-alpine
+
+stages:
+  - test
+  - sync
+
+variables:
+  GIT_STRATEGY: fetch
+  SOURCE_BRANCH: "main"
+  TARGET_BRANCH: "main"
+  SOURCE_SKILLS_PATH: "content/skills"
+  TARGET_SKILLS_PATH: "content/skills"
+  DRY_RUN: "false"
+  DELETE_REMOVED_MARKDOWN: "true"
+  WORK_ROOT: "/tmp/faast-sync"
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+
+before_script:
+  - apk add --no-cache git ca-certificates
+  - python --version
+  - git --version
+
+unit_test:
+  stage: test
+  script:
+    - python -m unittest discover -s tests -v
+
+sync_faast_skills:
+  stage: sync
+  resource_group: faast-skill-sync
+  needs:
+    - unit_test
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+  script:
+    - test -n "$SOURCE_REPOSITORY_URL"
+    - test -n "$TARGET_REPOSITORY_URL"
+    - test -n "$SOURCE_GITHUB_TOKEN"
+    - test -n "$TARGET_GITLAB_TOKEN"
+    - rm -rf "$WORK_ROOT"
+    - mkdir -p "$WORK_ROOT"
+    - export SOURCE_AUTH_URL="$(python scripts/sync_skills.py --inject-token "$SOURCE_REPOSITORY_URL" "$SOURCE_GITHUB_TOKEN" --token-user x-access-token)"
+    - export TARGET_AUTH_URL="$(python scripts/sync_skills.py --inject-token "$TARGET_REPOSITORY_URL" "$TARGET_GITLAB_TOKEN" --token-user oauth2)"
+    - git clone --depth 1 --branch "$SOURCE_BRANCH" "$SOURCE_AUTH_URL" "$WORK_ROOT/source"
+    - git clone --branch "$TARGET_BRANCH" "$TARGET_AUTH_URL" "$WORK_ROOT/target"
+    - git -C "$WORK_ROOT/target" config user.name "${GIT_AUTHOR_NAME:-FAAST Sync Bot}"
+    - git -C "$WORK_ROOT/target" config user.email "${GIT_AUTHOR_EMAIL:-faast-sync-bot@example.invalid}"
+    - |
+      ARGS="--source-repo $WORK_ROOT/source --target-repo $WORK_ROOT/target --source-skills-path $SOURCE_SKILLS_PATH --target-skills-path $TARGET_SKILLS_PATH --report sync-report.json"
+      if [ "$DELETE_REMOVED_MARKDOWN" = "true" ]; then ARGS="$ARGS --delete"; fi
+      if [ "$DRY_RUN" = "true" ]; then ARGS="$ARGS --dry-run"; fi
+      python scripts/sync_skills.py $ARGS
+    - cp sync-report.json "$CI_PROJECT_DIR/sync-report.json"
+    - |
+      if [ "$DRY_RUN" = "true" ]; then
+        echo "Dry run completed. No target commit will be created."
+        exit 0
+      fi
+    - cd "$WORK_ROOT/target"
+    - git add -- "$TARGET_SKILLS_PATH"
+    - |
+      if git diff --cached --quiet; then
+        echo "No FAAST skill changes detected."
+        exit 0
+      fi
+    - export SOURCE_COMMIT="$(git -C "$WORK_ROOT/source" rev-parse HEAD)"
+    - git commit -m "chore(faast): monthly skill sync from ${SOURCE_COMMIT} [skip ci]"
+    - git push "$TARGET_AUTH_URL" "HEAD:$TARGET_BRANCH" -o ci.skip
+  artifacts:
+    when: always
+    paths:
+      - sync-report.json
+    expire_in: 90 days
